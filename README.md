@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# X Manager (Self-Hosted)
 
-## Getting Started
+A powerful, self-hosted dashboard for managing your X (formerly Twitter) bookmarks and likes. It comes with a Chrome Extension that automatically syncs your browsing activity to your local database.
 
-First, run the development server:
+## Features
+
+- **Dashboard**: Clean, dark-mode UI to view and manage tweets.
+- **Auto-Import**: Chrome Extension intercepts X.com traffic to automatically save tweets you view or bookmark.
+- **Organization**: Organize tweets into folders (AI, Dev, Design, etc.) automatically or manually.
+- **Search**: Full-text search through your saved tweets.
+- **Privacy**: Self-hosted data. Your bookmarks live on your machine, not in the cloud.
+
+## Tech Stack
+
+- **Frontend**: Next.js 14 (App Router), Tailwind CSS, Lucide React
+- **Backend**: Next.js API Routes
+- **Database**: PostgreSQL, Prisma ORM
+- **Extension**: Chrome Manifest V3
+
+## Prerequisites
+
+- **Node.js** (v18 or higher)
+- **PostgreSQL** (Local installation or Docker)
+- **Google Chrome** (for the extension)
+
+## Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone <your-repo-url>
+cd X-Libris
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure Environment Variables
+
+Create a `.env` file in the root directory (or modify the existing one):
+
+```env
+# Database Connection
+# Replace 'root' with your actual Postgres password if different
+DATABASE_URL="postgresql://postgres:root@127.0.0.1:5432/x_manager?connect_timeout=10&sslmode=disable"
+
+# API Security
+API_SECRET="secret-api-key-123"
+```
+
+### 4. Setup Database
+
+Initialize the database schema:
+
+```bash
+npx prisma db push
+```
+
+### 5. Run the Application
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Chrome Extension Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Open Chrome and navigate to `chrome://extensions`.
+2. Enable **Developer mode** in the top right corner.
+3. Click **Load unpacked**.
+4. Select the `extension` folder inside this project directory.
+5. The extension "X Manager Interceptor" should now be active.
 
-## Learn More
+## Usage
 
-To learn more about Next.js, take a look at the following resources:
+1. Ensure the Next.js app is running (`npm run dev`).
+2. Visit [x.com](https://x.com).
+3. Browse your Bookmarks, Likes, or Timeline.
+4. The extension will automatically capture tweet data and send it to your local dashboard.
+5. Refresh [http://localhost:3000](http://localhost:3000) to see your imported tweets.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Troubleshooting
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Database Connection Failed**:
+  - Ensure PostgreSQL is running.
+  - Check if the password in `.env` matches your local Postgres user (`postgres`).
+  - Try changing `localhost` to `127.0.0.1` in `DATABASE_URL`.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Extension Errors**:
+  - If you see `InvalidStateError` or JSON errors in the console, it might be a conflict with other extensions. Try disabling other X/Twitter-related extensions.
+  - Ensure the backend server is running on port 3000.
