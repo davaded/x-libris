@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+    }
+    h1 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1 span { color: #1d9bf0; }
+    .stats {
+      background: #161616;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+      color: #888;
+    }
+    .stat-row span:last-child { color: #fff; font-weight: 500; }
+    .divider {
+      height: 1px;
+      background: #333;
+      margin: 12px 0;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+    .btn-primary {
+      background: #1d9bf0;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #1a8cd8; }
+    .btn-primary:disabled {
+      background: #333;
+      color: #666;
+      cursor: not-allowed;
+    }
+    .btn-danger {
+      background: #f4212e;
+      color: #fff;
+    }
+    .btn-danger:hover { background: #dc1e2a; }
+    .btn-secondary {
+      background: #333;
+      color: #fff;
+    }
+    .btn-secondary:hover { background: #444; }
+    .status {
+      text-align: center;
+      padding: 8px;
+      font-size: 12px;
+      color: #888;
+    }
+    .status.active { color: #00ba7c; }
+    .settings {
+      margin-top: 12px;
+    }
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 13px;
+    }
+    .setting-row input {
+      width: 60px;
+      padding: 4px 8px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #161616;
+      color: #fff;
+      text-align: center;
+    }
+    .progress {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 20px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      transition: .3s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #1d9bf0;
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+  </style>
+</head>
+<body>
+  <h1>📚 <span>X Manager</span></h1>
+  
+  <div class="stats">
+    <div class="stat-row">
+      <span>本次抓取</span>
+      <span id="sessionCount">0 条</span>
+    </div>
+    <div class="stat-row">
+      <span>状态</span>
+      <span id="status">待机中</span>
+    </div>
+  </div>
+
+  <button id="startBtn" class="btn-primary">🚀 开始自动滚动</button>
+  <button id="stopBtn" class="btn-danger" style="display:none;">⏹ 停止</button>
+  
+  <div class="settings">
+    <div class="setting-row">
+      <span>滚动间隔 (毫秒)</span>
+      <input type="number" id="scrollInterval" value="1500" min="500" max="5000">
+    </div>
+    <div class="setting-row">
+      <span>最大滚动次数</span>
+      <input type="number" id="maxScrolls" value="50" min="10" max="200">
+    </div>
+    <div style="font-size: 10px; color: #666; margin-top: 4px;">
+      ⚠️ 建议每次不超过 50 次，防止页面崩溃
+    </div>
+    <div class="setting-row">
+      <span>跳过已存在的推文</span>
+      <label class="switch">
+        <input type="checkbox" id="skipExisting" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="progress" id="progress"></div>
+
+  <div class="divider"></div>
+  
+  <div class="stats" id="cacheStats" style="font-size: 11px;">
+    <div class="stat-row">
+      <span>缓存 (likes)</span>
+      <span id="cacheLikes">0</span>
+    </div>
+    <div class="stat-row">
+      <span>缓存 (bookmarks)</span>
+      <span id="cacheBookmarks">0</span>
+    </div>
+    <div class="stat-row">
+      <span>缓存 (my_tweets)</span>
+      <span id="cacheMyTweets">0</span>
+    </div>
+  </div>
+  
+  <button id="clearCacheBtn" class="btn-secondary" style="font-size: 12px; padding: 8px;">🗑 清除缓存</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

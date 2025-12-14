@@ -1,76 +1,162 @@
 // background service worker（MV3）
 console.log('[x-libris:background] Service worker started');
 
-const API_URL = 'http://localhost:3000/api/import';
+const API_BASE = 'http://localhost:3000/api';
 const API_KEY = 'secret-api-key-123';
 
-// ========== 工具函数 ==========
-function safeJsonParse(text) {
-  if (!text) {
-    console.log('[x-libris:background] safeJsonParse: empty text');
-    return null;
-  }
+// ========== 已抓取 ID 缓存 ==========
+// 格式: { likes: Set, bookmarks: Set, my_tweets: Set }
+const cachedIds = {
+  likes: new Set(),
+  bookmarks: new Set(),
+  my_tweets: new Set()
+};
+
+// 从后端加载已有 ID
+async function loadExistingIds(source) {
   try {
-    return JSON.parse(text);
+    console.log('[x-libris:background] 加载已有 ID，source:', source);
+    const res = await fetch(`${API_BASE}/tweets/ids?source=${source}`);
+    const data = await res.json();
+    
+    if (data.ids && Array.isArray(data.ids)) {
+      cachedIds[source] = new Set(data.ids);
+      console.log('[x-libris:background] 已加载', data.ids.length, '个 ID');
+      return data.ids.length;
+    }
+    return 0;
   } catch (e) {
-    console.warn('[x-libris:background] JSON parse failed:', e.message, 'text preview:', text.slice(0, 100));
-    return null;
+    console.error('[x-libris:background] 加载 ID 失败:', e.message);
+    return 0;
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[x-libris:background] Received message:', message.type);
+// 过滤掉已存在的推文
+function filterNewTweets(tweets, source) {
+  // 确保 source 有对应的缓存
+  if (!cachedIds[source]) {
+    cachedIds[source] = new Set();
+  }
   
-  if (message.type !== 'IMPORT_X_DATA') {
-    console.log('[x-libris:background] Ignoring non-IMPORT message');
-    return;
+  const existingSet = cachedIds[source];
+  const newTweets = tweets.filter(t => !existingSet.has(t.id));
+  const skipped = tweets.length - newTweets.length;
+  
+  // 把新的 ID 加入缓存
+  newTweets.forEach(t => existingSet.add(t.id));
+  
+  console.log('[x-libris:background] 过滤: source=', source, '总共', tweets.length, '新增', newTweets.length, '跳过', skipped);
+  return { newTweets, skipped };
+}
+
+// ========== 消息处理 ==========
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // 加载已有 ID
+  if (message.type === 'LOAD_EXISTING_IDS') {
+    loadExistingIds(message.source).then(count => {
+      sendResponse({ ok: true, count });
+    });
+    return true;
   }
 
-  console.log('[x-libris:background] Processing IMPORT_X_DATA');
-  console.log('[x-libris:background] Payload keys:', Object.keys(message.payload || {}));
+  // 获取缓存状态
+  if (message.type === 'GET_CACHE_STATUS') {
+    const status = {
+      likes: cachedIds.likes.size,
+      bookmarks: cachedIds.bookmarks.size,
+      my_tweets: cachedIds.my_tweets.size
+    };
+    sendResponse({ ok: true, status });
+    return true;
+  }
 
-  fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': API_KEY
-    },
-    body: JSON.stringify(message.payload)
-  })
-    .then(async (res) => {
-      console.log('[x-libris:background] API response status:', res.status);
-      console.log('[x-libris:background] API response headers:', res.headers.get('content-type'));
+  // 清除缓存
+  if (message.type === 'CLEAR_CACHE') {
+    const source = message.source;
+    if (source && cachedIds[source]) {
+      cachedIds[source].clear();
+    } else {
+      Object.keys(cachedIds).forEach(k => cachedIds[k].clear());
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
 
-      const text = await res.text();
-      console.log('[x-libris:background] API response text length:', text?.length);
-      console.log('[x-libris:background] API response preview:', text?.slice(0, 200));
+  // 导入数据
+  if (message.type === 'IMPORT_X_DATA') {
+    handleImport(message, sendResponse);
+    return true; // 保持消息通道
+  }
 
-      if (!text) {
-        console.warn('[x-libris:background] Empty response body');
-        return { ok: false, error: 'Empty response' };
-      }
+  return false;
+});
 
-      const data = safeJsonParse(text);
+// 异步处理导入
+async function handleImport(message, sendResponse) {
+  try {
+    const payload = message.payload;
+    const source = payload.source || 'unknown';
+    const skipExisting = payload.skipExisting !== false;
+    const tweetCount = payload.parsed?.length || 0;
 
-      if (!data) {
-        console.warn('[x-libris:background] Invalid JSON response');
-        return { ok: false, error: 'Invalid JSON response' };
-      }
+    console.log('[x-libris:background] 处理导入, source:', source, 'skipExisting:', skipExisting, '推文数:', tweetCount);
+    console.log('[x-libris:background] 当前缓存大小:', cachedIds[source]?.size || 0);
 
-      console.log('[x-libris:background] Import success, data:', data);
-      return { ok: true, data };
-    })
-    .then((result) => {
-      console.log('[x-libris:background] Sending response to content:', result);
-      sendResponse(result);
-    })
-    .catch((err) => {
-      console.error('[x-libris:background] Import failed:', err.message);
-      sendResponse({ ok: false, error: err.message });
+    let tweetsToSend = payload.parsed || [];
+    let skippedByCache = 0;
+
+    // 在扩展端过滤
+    if (skipExisting && tweetsToSend.length > 0) {
+      const result = filterNewTweets(tweetsToSend, source);
+      tweetsToSend = result.newTweets;
+      skippedByCache = result.skipped;
+    }
+
+    // 如果全部跳过，直接返回
+    if (tweetsToSend.length === 0) {
+      console.log('[x-libris:background] 全部跳过，无需请求后端');
+      sendResponse({ ok: true, count: 0, skipped: skippedByCache });
+      return;
+    }
+
+    // 发送到后端
+    const res = await fetch(`${API_BASE}/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY
+      },
+      body: JSON.stringify({
+        ...payload,
+        parsed: tweetsToSend
+      })
     });
 
-  // 保持消息通道
-  return true;
-});
+    const text = await res.text();
+    console.log('[x-libris:background] API 响应:', text.slice(0, 200));
+    
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error('[x-libris:background] JSON 解析失败:', e.message);
+      sendResponse({ ok: false, error: 'Invalid JSON: ' + text.slice(0, 100) });
+      return;
+    }
+    
+    const totalSkipped = skippedByCache + (data.skipped || 0);
+    
+    console.log('[x-libris:background] 导入完成, count:', data.count, 'skipped:', totalSkipped);
+    
+    sendResponse({ 
+      ok: true, 
+      count: data.count || 0, 
+      skipped: totalSkipped 
+    });
+  } catch (err) {
+    console.error('[x-libris:background] Import failed:', err);
+    sendResponse({ ok: false, error: err.message || String(err) });
+  }
+}
 
 console.log('[x-libris:background] Message listener installed');

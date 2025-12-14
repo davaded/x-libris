@@ -15,10 +15,20 @@
     }
   }
 
+  // 匹配目标 API：用户推文、收藏、喜欢
   const isTarget = (url) =>
     url &&
     url.includes('graphql') &&
-    /bookmark|usertweet/i.test(url);
+    /bookmark|usertweet|likes/i.test(url);
+
+  // 根据 URL 判断来源类型
+  function getSourceType(url) {
+    if (!url) return 'unknown';
+    if (/usertweet/i.test(url)) return 'my_tweets';
+    if (/likes/i.test(url)) return 'likes';
+    if (/bookmark/i.test(url)) return 'bookmarks';
+    return 'unknown';
+  }
 
   // ========== 解析 Twitter 数据 ==========
   function parseTweets(json) {
@@ -38,6 +48,10 @@
       // Bookmarks 结构
       else if (json?.data?.bookmark_timeline_v2?.timeline?.instructions) {
         instructions = json.data.bookmark_timeline_v2.timeline.instructions;
+      }
+      // Likes 结构
+      else if (json?.data?.user?.result?.timeline_v2?.timeline?.instructions) {
+        instructions = json.data.user.result.timeline_v2.timeline.instructions;
       }
       
       if (!instructions) {
@@ -75,16 +89,27 @@
       
       const user = tweet.core?.user_results?.result;
       const legacy = tweet.legacy;
+      const screenName = user?.core?.screen_name || user?.legacy?.screen_name;
+      
+      // 提取话题标签
+      const hashtags = legacy?.entities?.hashtags?.map(h => h.text) || [];
+      
+      // 构建推文 URL
+      const tweetUrl = screenName && tweet.rest_id 
+        ? `https://x.com/${screenName}/status/${tweet.rest_id}`
+        : null;
       
       return {
         id: tweet.rest_id,
+        url: tweetUrl,
         author: {
           id: user?.rest_id,
           name: user?.core?.name,
-          screen_name: user?.core?.screen_name,
+          screen_name: screenName,
           avatar: user?.avatar?.image_url
         },
         text: legacy?.full_text,
+        hashtags: hashtags,
         created_at: legacy?.created_at,
         metrics: {
           replies: legacy?.reply_count,
@@ -121,64 +146,35 @@
       console.log('[x-libris:injected] XHR target detected:', url);
 
       xhr.addEventListener('load', function () {
-        console.log('[x-libris:injected] XHR load event fired');
-        console.log('[x-libris:injected] XHR responseType:', xhr.responseType);
-        console.log('[x-libris:injected] XHR status:', xhr.status);
-
-        // 关键修复：检查 responseType
+        // 检查 responseType
         const responseType = xhr.responseType;
-        if (responseType && responseType !== '' && responseType !== 'text') {
-          console.log('[x-libris:injected] Skipping non-text responseType:', responseType);
-          return;
-        }
+        if (responseType && responseType !== '' && responseType !== 'text') return;
 
         // 检查 content-type
         const contentType = xhr.getResponseHeader('content-type') || '';
-        console.log('[x-libris:injected] XHR content-type:', contentType);
-        
-        if (!contentType.includes('application/json')) {
-          console.log('[x-libris:injected] Skipping non-JSON content-type');
-          return;
-        }
+        if (!contentType.includes('application/json')) return;
 
         // 安全读取 responseText
         let text;
         try {
           text = xhr.responseText;
-          console.log('[x-libris:injected] XHR responseText length:', text?.length);
         } catch (e) {
-          console.error('[x-libris:injected] Failed to read responseText:', e.message);
           return;
         }
-
-        if (!text) {
-          console.log('[x-libris:injected] Empty responseText, skipping');
-          return;
-        }
+        if (!text) return;
 
         const json = safeJsonParse(text);
-        if (!json) {
-          console.log('[x-libris:injected] Failed to parse JSON, skipping');
-          return;
-        }
+        if (!json) return;
 
-        console.log('[x-libris:injected] ✅ XHR 抓取成功！');
-        
-        // 解析 Twitter 数据结构
+        const source = getSourceType(url);
         const tweets = parseTweets(json);
-        console.log('[x-libris:injected] 解析出 ' + tweets.length + ' 条推文');
-        tweets.forEach((t, i) => {
-          console.log(`[x-libris:injected] 推文 ${i + 1}:`, {
-            id: t.id,
-            author: t.author,
-            text: t.text?.slice(0, 100) + '...',
-            created_at: t.created_at,
-            metrics: t.metrics
-          });
-        });
         
+        // 精简日志，只打印数量
+        console.log('[x-libris:injected] ✅ 抓取', tweets.length, '条推文，来源:', source);
+        
+        // 不再发送 raw 数据，减少内存占用
         window.postMessage(
-          { type: 'X_LIBRIS_DATA', payload: { raw: json, parsed: tweets } },
+          { type: 'X_LIBRIS_DATA', payload: { parsed: tweets, source } },
           '*'
         );
       });
@@ -202,41 +198,20 @@
 
     if (isTargetUrl) {
       try {
-        console.log('[x-libris:injected] fetch response status:', res.status);
-        
         const clone = res.clone();
         const text = await clone.text();
-        
-        console.log('[x-libris:injected] fetch response text length:', text?.length);
-        
-        if (!text) {
-          console.log('[x-libris:injected] Empty fetch response, skipping');
-          return res;
-        }
+        if (!text) return res;
 
         const json = safeJsonParse(text);
-        if (!json) {
-          console.log('[x-libris:injected] Failed to parse fetch JSON, skipping');
-          return res;
-        }
+        if (!json) return res;
 
-        console.log('[x-libris:injected] ✅ fetch 抓取成功！');
-        
-        // 解析 Twitter 数据结构
+        const source = getSourceType(url);
         const tweets = parseTweets(json);
-        console.log('[x-libris:injected] 解析出 ' + tweets.length + ' 条推文');
-        tweets.forEach((t, i) => {
-          console.log(`[x-libris:injected] 推文 ${i + 1}:`, {
-            id: t.id,
-            author: t.author,
-            text: t.text?.slice(0, 100) + '...',
-            created_at: t.created_at,
-            metrics: t.metrics
-          });
-        });
+        
+        console.log('[x-libris:injected] ✅ 抓取', tweets.length, '条推文，来源:', source);
         
         window.postMessage(
-          { type: 'X_LIBRIS_DATA', payload: { raw: json, parsed: tweets } },
+          { type: 'X_LIBRIS_DATA', payload: { parsed: tweets, source } },
           '*'
         );
       } catch (e) {

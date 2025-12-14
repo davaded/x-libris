@@ -15,13 +15,19 @@ datasource db {
 
 model Tweet {
   id           String   @id
+  url          String?  // 推文链接
   content      String
   authorName   String
   authorHandle String
   authorAvatar String
   mediaUrls    String[]
+  hashtags     String[] // 话题标签
   folder       String   @default("Unsorted")
+  source       String   @default("unknown") // "my_tweets" | "likes" | "bookmarks"
   stats        Json
   tweetedAt    DateTime
   createdAt    DateTime @default(now())
+
+  @@index([source])
+  @@index([folder])
 }

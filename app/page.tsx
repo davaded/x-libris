@@ -35,6 +35,7 @@ interface Tweet {
         avatar: string;
     };
     folder: string;
+    source: string; // "my_tweets" | "likes" | "bookmarks"
     content: string;
     media: {
         type: string;
@@ -195,19 +196,48 @@ export default function App() {
     const [tweets, setTweets] = useState<Tweet[]>([]);
     const [selectedIds, setSelectedIds] = useState(new Set<string>());
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [activeFolder, setActiveFolder] = useState("All");
+    const [activeSource, setActiveSource] = useState("all");
+    const [sourceCounts, setSourceCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
+    
+    // 分页状态
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(20);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    // 搜索防抖
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            setPage(1); // 搜索时重置到第一页
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // --- Fetch Data ---
     useEffect(() => {
         async function fetchTweets() {
+            setLoading(true);
             try {
-                const res = await fetch('/api/tweets');
+                const params = new URLSearchParams();
+                params.set('page', page.toString());
+                params.set('pageSize', pageSize.toString());
+                if (activeSource !== 'all') params.set('source', activeSource);
+                if (activeFolder !== 'All') params.set('folder', activeFolder);
+                if (debouncedSearch) params.set('search', debouncedSearch);
+                
+                const res = await fetch(`/api/tweets?${params}`);
                 const data = await res.json();
-                if (Array.isArray(data)) {
-                    setTweets(data);
+                
+                if (data.tweets && Array.isArray(data.tweets)) {
+                    setTweets(data.tweets);
+                    setSourceCounts(data.sourceCounts || {});
+                    setTotalPages(data.pagination?.totalPages || 1);
+                    setTotal(data.pagination?.total || 0);
                 } else {
-                    console.error('Fetched data is not an array:', data);
                     setTweets([]);
                 }
             } catch (error) {
@@ -218,7 +248,7 @@ export default function App() {
             }
         }
         fetchTweets();
-    }, []);
+    }, [activeSource, activeFolder, page, pageSize, debouncedSearch]);
 
     // --- Logic: Auto-Calculate Counts from Data ---
     const folderCounts = useMemo(() => {
@@ -234,26 +264,8 @@ export default function App() {
         return counts;
     }, [tweets]);
 
-    // --- Logic: Filtering ---
-    const filteredTweets = useMemo(() => {
-        let result = tweets;
-
-        // 1. Folder Filter
-        if (activeFolder !== "All") {
-            result = result.filter(t => t.folder === activeFolder);
-        }
-
-        // 2. Search Filter
-        if (searchQuery) {
-            const lowerQuery = searchQuery.toLowerCase();
-            result = result.filter(t =>
-                t.content.toLowerCase().includes(lowerQuery) ||
-                t.user.name.toLowerCase().includes(lowerQuery) ||
-                t.user.handle.toLowerCase().includes(lowerQuery)
-            );
-        }
-        return result;
-    }, [tweets, searchQuery, activeFolder]);
+    // 服务端已经过滤，直接使用 tweets
+    const filteredTweets = tweets;
 
     const toggleSelection = (id: string) => {
         const newSet = new Set(selectedIds);
@@ -298,23 +310,47 @@ export default function App() {
 
                 {/* Navigation */}
                 <div className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-                    <div className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">我的資料</div>
-                    <SidebarItem icon={FileText} label="所有推文" count={folderCounts["All"]} active={activeFolder === "All"} onClick={() => setActiveFolder("All")} />
-                    <SidebarItem icon={User} label="使用者" />
-                    <SidebarItem icon={List} label="列表" />
-                    <SidebarItem icon={Zap} label="發現" />
+                    <div className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">來源分類</div>
+                    <SidebarItem 
+                        icon={FileText} 
+                        label="全部" 
+                        count={Object.values(sourceCounts).reduce((a, b) => a + b, 0)} 
+                        active={activeSource === "all"} 
+                        onClick={() => { setActiveSource("all"); setActiveFolder("All"); setPage(1); }} 
+                    />
+                    <SidebarItem 
+                        icon={User} 
+                        label="我的推文" 
+                        count={sourceCounts["my_tweets"] || 0} 
+                        active={activeSource === "my_tweets"} 
+                        onClick={() => { setActiveSource("my_tweets"); setActiveFolder("All"); setPage(1); }} 
+                    />
+                    <SidebarItem 
+                        icon={Heart} 
+                        label="喜歡" 
+                        count={sourceCounts["likes"] || 0} 
+                        active={activeSource === "likes"} 
+                        onClick={() => { setActiveSource("likes"); setActiveFolder("All"); setPage(1); }} 
+                    />
+                    <SidebarItem 
+                        icon={Folder} 
+                        label="收藏" 
+                        count={sourceCounts["bookmarks"] || 0} 
+                        active={activeSource === "bookmarks"} 
+                        onClick={() => { setActiveSource("bookmarks"); setActiveFolder("All"); setPage(1); }} 
+                    />
 
                     <div className="mt-6 px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">智能分類 (AI)</div>
-                    <SidebarItem icon={BrainCircuit} label="AI" count={folderCounts["AI"] || 0} active={activeFolder === "AI"} onClick={() => setActiveFolder("AI")} />
-                    <SidebarItem icon={Code2} label="Dev" count={folderCounts["Dev"] || 0} active={activeFolder === "Dev"} onClick={() => setActiveFolder("Dev")} />
-                    <SidebarItem icon={Palette} label="Design" count={folderCounts["Design"] || 0} active={activeFolder === "Design"} onClick={() => setActiveFolder("Design")} />
-                    <SidebarItem icon={Video} label="Media" count={folderCounts["Media"] || 0} active={activeFolder === "Media"} onClick={() => setActiveFolder("Media")} />
+                    <SidebarItem icon={BrainCircuit} label="AI" count={folderCounts["AI"] || 0} active={activeFolder === "AI"} onClick={() => { setActiveFolder("AI"); setPage(1); }} />
+                    <SidebarItem icon={Code2} label="Dev" count={folderCounts["Dev"] || 0} active={activeFolder === "Dev"} onClick={() => { setActiveFolder("Dev"); setPage(1); }} />
+                    <SidebarItem icon={Palette} label="Design" count={folderCounts["Design"] || 0} active={activeFolder === "Design"} onClick={() => { setActiveFolder("Design"); setPage(1); }} />
+                    <SidebarItem icon={Video} label="Media" count={folderCounts["Media"] || 0} active={activeFolder === "Media"} onClick={() => { setActiveFolder("Media"); setPage(1); }} />
 
                     <div className="mt-6 px-3 flex items-center justify-between mb-2">
                         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">資料夾</span>
                         <button className="text-gray-500 hover:text-white"><FolderInput size={14} /></button>
                     </div>
-                    <SidebarItem icon={Folder} label="Unsorted" count={folderCounts["Unsorted"] || 0} active={activeFolder === "Unsorted"} onClick={() => setActiveFolder("Unsorted")} />
+                    <SidebarItem icon={Folder} label="Unsorted" count={folderCounts["Unsorted"] || 0} active={activeFolder === "Unsorted"} onClick={() => { setActiveFolder("Unsorted"); setPage(1); }} />
                 </div>
 
                 {/* Sync Status (New Feature Simulation) */}
@@ -344,8 +380,15 @@ export default function App() {
                 {/* Top Bar */}
                 <div className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-[#0a0a0a]">
                     <div className="flex items-center gap-4 flex-1">
-                        <h2 className="text-white font-semibold text-lg">{activeFolder === 'All' ? '所有推文' : activeFolder}</h2>
-                        <span className="px-2 py-0.5 bg-gray-800 text-gray-400 text-xs rounded-full">{filteredTweets.length} items</span>
+                        <h2 className="text-white font-semibold text-lg">
+                            {activeSource === 'all' ? '全部' : 
+                             activeSource === 'likes' ? '喜歡' :
+                             activeSource === 'bookmarks' ? '收藏' :
+                             activeSource === 'my_tweets' ? '我的推文' : '推文'}
+                            {activeFolder !== 'All' && ` / ${activeFolder}`}
+                        </h2>
+                        <span className="px-2 py-0.5 bg-gray-800 text-gray-400 text-xs rounded-full">{total} 條</span>
+                        {loading && <RefreshCw size={14} className="animate-spin text-gray-500" />}
                     </div>
 
                     <div className="relative w-64">
@@ -425,16 +468,29 @@ export default function App() {
                 {/* Footer */}
                 <div className="h-14 border-t border-gray-800 flex items-center justify-between px-6 bg-[#0a0a0a]">
                     <div className="flex items-center gap-2">
-                        <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 disabled:opacity-50"><ChevronLeft size={16} /></button>
+                        <button 
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="p-1.5 rounded hover:bg-white/10 text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
                         <div className="flex items-center gap-1">
-                            <button className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white text-xs font-medium">1</button>
-                            <span className="text-gray-600 text-xs">/ 1 頁</span>
+                            <span className="px-3 py-1 bg-white/10 text-white text-xs font-medium rounded">{page}</span>
+                            <span className="text-gray-600 text-xs">/ {totalPages} 頁</span>
                         </div>
-                        <button className="p-1.5 rounded hover:bg-white/10 text-gray-400"><ChevronRight size={16} /></button>
+                        <button 
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="p-1.5 rounded hover:bg-white/10 text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>已選擇 {selectedIds.size} / {tweets.length}</span>
+                        <span>共 {total} 條</span>
+                        <span>已選擇 {selectedIds.size}</span>
                     </div>
                 </div>
             </div>
