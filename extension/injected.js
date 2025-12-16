@@ -33,14 +33,14 @@
   // ========== 解析 Twitter 数据 ==========
   function parseTweets(json) {
     const tweets = [];
-    
+
     try {
       // Twitter GraphQL 返回的数据结构
       // data.user.result.timeline.timeline.instructions[].entries[]
       // 或 data.bookmark_timeline_v2.timeline.instructions[].entries[]
-      
+
       let instructions = null;
-      
+
       // UserTweets 结构
       if (json?.data?.user?.result?.timeline?.timeline?.instructions) {
         instructions = json.data.user.result.timeline.timeline.instructions;
@@ -53,15 +53,15 @@
       else if (json?.data?.user?.result?.timeline_v2?.timeline?.instructions) {
         instructions = json.data.user.result.timeline_v2.timeline.instructions;
       }
-      
+
       if (!instructions) {
         console.log('[x-libris:injected] 未找到 instructions，原始结构:', Object.keys(json?.data || {}));
         return tweets;
       }
-      
+
       for (const instruction of instructions) {
         if (instruction.type !== 'TimelineAddEntries') continue;
-        
+
         for (const entry of instruction.entries || []) {
           const tweet = extractTweet(entry);
           if (tweet) tweets.push(tweet);
@@ -70,45 +70,53 @@
     } catch (e) {
       console.error('[x-libris:injected] 解析失败:', e);
     }
-    
+
     return tweets;
   }
-  
+
   function extractTweet(entry) {
     try {
       // entry.content.itemContent.tweet_results.result
       const result = entry?.content?.itemContent?.tweet_results?.result;
       if (!result) return null;
-      
+
       // 处理 TweetWithVisibilityResults 包装
-      const tweet = result.__typename === 'TweetWithVisibilityResults' 
-        ? result.tweet 
+      const tweet = result.__typename === 'TweetWithVisibilityResults'
+        ? result.tweet
         : result;
-      
+
       if (!tweet || tweet.__typename !== 'Tweet') return null;
-      
+
       const user = tweet.core?.user_results?.result;
       const legacy = tweet.legacy;
       const screenName = user?.core?.screen_name || user?.legacy?.screen_name;
-      
+
       // 提取话题标签
       const hashtags = legacy?.entities?.hashtags?.map(h => h.text) || [];
-      
-      // 构建推文 URL
-      const tweetUrl = screenName && tweet.rest_id 
-        ? `https://x.com/${screenName}/status/${tweet.rest_id}`
-        : null;
-      
+
+      // 构建推文 URL (Fallback to /i/web/status if handle missing)
+      let tweetUrl = null;
+      if (tweet.rest_id) {
+        if (screenName) {
+          tweetUrl = `https://x.com/${screenName}/status/${tweet.rest_id}`;
+        } else {
+          tweetUrl = `https://x.com/i/web/status/${tweet.rest_id}`;
+        }
+      }
+
+      // 不再替换 t.co 链接，保留原始文本
+      const fullText = legacy?.full_text || '';
+
       return {
         id: tweet.rest_id,
         url: tweetUrl,
         author: {
           id: user?.rest_id,
-          name: user?.core?.name,
+          name: user?.core?.name || user?.legacy?.name,
           screen_name: screenName,
-          avatar: user?.avatar?.image_url
+          avatar: user?.avatar?.image_url || user?.legacy?.profile_image_url_https
         },
-        text: legacy?.full_text,
+        text: fullText,
         hashtags: hashtags,
         created_at: legacy?.created_at,
         metrics: {
@@ -168,10 +176,10 @@
 
         const source = getSourceType(url);
         const tweets = parseTweets(json);
-        
+
         // 精简日志，只打印数量
         console.log('[x-libris:injected] ✅ 抓取', tweets.length, '条推文，来源:', source);
-        
+
         // 不再发送 raw 数据，减少内存占用
         window.postMessage(
           { type: 'X_LIBRIS_DATA', payload: { parsed: tweets, source } },
@@ -189,7 +197,7 @@
   window.fetch = async (...args) => {
     const url = args[0]?.toString();
     const isTargetUrl = isTarget(url);
-    
+
     if (isTargetUrl) {
       console.log('[x-libris:injected] fetch target detected:', url);
     }
@@ -207,9 +215,9 @@
 
         const source = getSourceType(url);
         const tweets = parseTweets(json);
-        
+
         console.log('[x-libris:injected] ✅ 抓取', tweets.length, '条推文，来源:', source);
-        
+
         window.postMessage(
           { type: 'X_LIBRIS_DATA', payload: { parsed: tweets, source } },
           '*'
