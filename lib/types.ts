@@ -24,3 +24,21 @@ export interface Tweet {
     hashtags?: string[];
     url?: string;
 }
+
+export interface ImportTweetPayload {
+    id: string;
+    url?: string;
+    content: string;
+    authorName: string;
+    authorHandle: string;
+    authorAvatar?: string;
+    mediaUrls?: string[];
+    hashtags?: string[];
+    replyCount?: number;
+    retweetCount?: number;
+    likeCount?: number;
+    quoteCount?: number;
+    folder?: string;
+    source?: string;
+    tweetedAt?: string;
+}
