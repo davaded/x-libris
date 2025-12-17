@@ -1,30 +1,32 @@
 import React from 'react';
 import {
-    FileText,
-    User,
+    LayoutDashboard,
     Heart,
+    Bookmark,
     Folder,
-    BrainCircuit,
-    Code2,
-    Palette,
-    Video,
-    FolderInput,
-    MoreHorizontal,
+    Settings,
     Zap,
-    RefreshCw
+    Layers,
+    Image as ImageIcon,
+    Code2,
+    PenTool
 } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { motion } from 'framer-motion';
 
 interface SidebarProps {
     activeSource: string;
     setActiveSource: (source: string) => void;
     activeFolder: string;
     setActiveFolder: (folder: string) => void;
-    sourceCounts: Record<string, number>;
-    folderCounts: Record<string, number>;
+    stats: {
+        total: number;
+        unsorted: number;
+        folders: { name: string, count: number }[];
+    };
     className?: string;
 }
 
@@ -34,22 +36,35 @@ interface SidebarItemProps {
     active?: boolean;
     count?: number;
     onClick?: () => void;
+    variant?: 'default' | 'folder';
 }
 
-const SidebarItem = ({ icon: Icon, label, active, count, onClick }: SidebarItemProps) => (
+const SidebarItem = ({ icon: Icon, label, active, count, onClick, variant = 'default' }: SidebarItemProps) => (
     <Button
         variant="ghost"
         className={cn(
-            "w-full justify-between px-3 py-2 h-auto font-normal hover:bg-zinc-800/50",
-            active ? "bg-zinc-800 text-white font-medium" : "text-zinc-400"
+            "w-full justify-between px-4 py-2 h-auto font-medium transition-all duration-200 group rounded-[4px]",
+            active
+                ? "bg-[#282828] text-white"
+                : "text-[#b3b3b3] hover:text-white hover:bg-[#1a1a1a]"
         )}
         onClick={onClick}
     >
         <div className="flex items-center gap-3">
-            <Icon size={18} />
-            <span>{label}</span>
+            <Icon size={variant === 'folder' ? 18 : 20} className={cn(
+                "transition-colors",
+                active ? "text-emerald-500" : "text-[#b3b3b3] group-hover:text-white"
+            )} />
+            <span className={cn("truncate font-medium", variant === 'folder' && "text-sm")}>{label}</span>
         </div>
-        {count !== undefined && <span className="text-xs text-zinc-500">{count}</span>}
+        {count !== undefined && (
+            <span className={cn(
+                "text-xs px-2 py-0.5 rounded-full transition-colors",
+                active ? "text-emerald-500" : "text-[#b3b3b3] group-hover:text-white"
+            )}>
+                {count}
+            </span>
+        )}
     </Button>
 );
 
@@ -58,92 +73,107 @@ export function Sidebar({
     setActiveSource,
     activeFolder,
     setActiveFolder,
-    sourceCounts,
-    folderCounts,
+    stats,
     className
 }: SidebarProps) {
-    const totalCount = Object.values(sourceCounts).reduce((a, b) => a + b, 0);
+
+    // Map icons to known folders
+    const getFolderIcon = (name: string) => {
+        switch (name.toLowerCase()) {
+            case 'ai': return Zap;
+            case 'dev': return Code2;
+            case 'design': return PenTool;
+            case 'media': return ImageIcon;
+            default: return Folder;
+        }
+    };
 
     return (
-        <div className={cn("w-64 flex flex-col border-r border-zinc-800 bg-[#09090b]", className)}>
-            {/* User Profile */}
-            <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
-                <Avatar className="h-9 w-9 border border-zinc-700">
-                    <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" />
-                    <AvatarFallback>AD</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                    <span className="text-white font-medium text-sm">Admin</span>
-                    <span className="text-zinc-500 text-xs">@admin</span>
+        <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className={cn("w-[280px] flex flex-col bg-black", className)}
+        >
+            {/* Brand */}
+            <div className="p-6 flex items-center gap-2">
+                <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+                    <span className="font-bold text-sm text-black">X</span>
                 </div>
-                <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-zinc-500">
-                    <MoreHorizontal size={16} />
-                </Button>
+                <span className="font-bold text-xl tracking-tight text-white">X-Libris</span>
             </div>
 
             {/* Navigation */}
-            <ScrollArea className="flex-1 py-4 px-2">
-                <div className="space-y-1">
-                    <div className="px-3 mb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">来源分类</div>
-                    <SidebarItem
-                        icon={FileText}
-                        label="全部"
-                        count={totalCount}
-                        active={activeSource === "all"}
-                        onClick={() => { setActiveSource("all"); setActiveFolder("All"); }}
-                    />
-                    <SidebarItem
-                        icon={User}
-                        label="我的推文"
-                        count={sourceCounts["my_tweets"] || 0}
-                        active={activeSource === "my_tweets"}
-                        onClick={() => { setActiveSource("my_tweets"); setActiveFolder("All"); }}
-                    />
-                    <SidebarItem
-                        icon={Heart}
-                        label="喜欢"
-                        count={sourceCounts["likes"] || 0}
-                        active={activeSource === "likes"}
-                        onClick={() => { setActiveSource("likes"); setActiveFolder("All"); }}
-                    />
-                    <SidebarItem
-                        icon={Folder}
-                        label="收藏"
-                        count={sourceCounts["bookmarks"] || 0}
-                        active={activeSource === "bookmarks"}
-                        onClick={() => { setActiveSource("bookmarks"); setActiveFolder("All"); }}
-                    />
+            <ScrollArea className="flex-1 px-2">
+                <div className="space-y-6 py-2">
 
-                    <div className="mt-6 px-3 mb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">智能分类 (AI)</div>
-                    <SidebarItem icon={BrainCircuit} label="AI" count={folderCounts["AI"] || 0} active={activeFolder === "AI"} onClick={() => setActiveFolder("AI")} />
-                    <SidebarItem icon={Code2} label="Dev" count={folderCounts["Dev"] || 0} active={activeFolder === "Dev"} onClick={() => setActiveFolder("Dev")} />
-                    <SidebarItem icon={Palette} label="Design" count={folderCounts["Design"] || 0} active={activeFolder === "Design"} onClick={() => setActiveFolder("Design")} />
-                    <SidebarItem icon={Video} label="Media" count={folderCounts["Media"] || 0} active={activeFolder === "Media"} onClick={() => setActiveFolder("Media")} />
-
-                    <div className="mt-6 px-3 flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">文件夹</span>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-white">
-                            <FolderInput size={14} />
-                        </Button>
+                    {/* Main Section */}
+                    <div className="space-y-1">
+                        <SidebarItem
+                            icon={LayoutDashboard}
+                            label="All Tweets"
+                            count={stats.total}
+                            active={activeSource === "all" && activeFolder === "All"}
+                            onClick={() => { setActiveSource("all"); setActiveFolder("All"); }}
+                        />
+                        <SidebarItem
+                            icon={Heart}
+                            label="Likes"
+                            active={activeSource === "likes"}
+                            onClick={() => { setActiveSource("likes"); setActiveFolder("All"); }}
+                        />
+                        <SidebarItem
+                            icon={Bookmark}
+                            label="Bookmarks"
+                            active={activeSource === "bookmarks"}
+                            onClick={() => { setActiveSource("bookmarks"); setActiveFolder("All"); }}
+                        />
                     </div>
-                    <SidebarItem icon={Folder} label="Unsorted" count={folderCounts["Unsorted"] || 0} active={activeFolder === "Unsorted"} onClick={() => setActiveFolder("Unsorted")} />
+
+                    {/* Folders Section */}
+                    <div>
+                        <div className="px-4 mb-2 flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">Folders</span>
+                            <Settings size={14} className="text-[#b3b3b3] cursor-pointer hover:text-white" />
+                        </div>
+                        <div className="space-y-1">
+                            <SidebarItem
+                                icon={Layers}
+                                label="Unsorted"
+                                count={stats.unsorted}
+                                active={activeFolder === "Unsorted"}
+                                onClick={() => setActiveFolder("Unsorted")}
+                                variant="folder"
+                            />
+
+                            {stats.folders.filter(f => f.name !== 'Unsorted').map(folder => (
+                                <SidebarItem
+                                    key={folder.name}
+                                    icon={getFolderIcon(folder.name)}
+                                    label={folder.name}
+                                    count={folder.count}
+                                    active={activeFolder === folder.name}
+                                    onClick={() => setActiveFolder(folder.name)}
+                                    variant="folder"
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </ScrollArea>
 
-            {/* Sync Status */}
-            <div className="p-3 mx-2 mb-2 rounded bg-emerald-950/30 border border-emerald-900/50 flex items-center gap-2">
-                <div className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            {/* User Profile */}
+            <div className="p-4 bg-black">
+                <div className="flex items-center gap-3 p-2 rounded-[4px] hover:bg-[#1a1a1a] cursor-pointer transition-colors group">
+                    <Avatar className="h-9 w-9 border border-[#282828]">
+                        <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" />
+                        <AvatarFallback>AD</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col overflow-hidden">
+                        <span className="text-white font-medium text-sm truncate group-hover:underline">Admin User</span>
+                        <span className="text-[#b3b3b3] text-xs truncate">admin@xlibris.ai</span>
+                    </div>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-emerald-400 font-medium">Extension Connected</span>
-                    <span className="text-[9px] text-emerald-600/70">Last synced: Just now</span>
-                </div>
-                <RefreshCw size={12} className="ml-auto text-emerald-700 cursor-pointer hover:rotate-180 transition-transform" />
             </div>
-
-
-        </div>
+        </motion.div>
     );
 }

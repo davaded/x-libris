@@ -8,11 +8,11 @@
 - **Runtime Verification**:
   - User confirmed the environment is runnable.
 
-## 2025-12-17: Steps 2, 3, & 4 - Core Implementation
+## 2025-12-17: Steps 2, 3, 4 & 5 - Core Implementation
 ### Completed Items
 - **Step 2: Database Schema Refactoring**
   - Updated `prisma/schema.prisma` with `User`, `Session`, and `Tweet` models.
-  - **Note**: `pgvector` extension and embedding fields were **temporarily disabled** due to target environment limitations (no Docker/pgvector support).
+  - **Note**: `pgvector` extension and embedding fields were **temporarily disabled** due to target environment limitations.
   - Successfully applied migration `init_no_vector`.
 
 - **Step 3: Authentication**
@@ -24,14 +24,19 @@
 - **Step 4: Extension Import API**
   - Implemented secure `/api/import` endpoint.
   - Defined `ImportTweetPayload` type.
-  - Created verification script `scripts/test-import.ts`.
+  - **Verified**: API successfully receives data and creates tweets in DB (verified via `scripts/test-import.ts`).
+
+- **Step 5: Dashboard Core Features**
+  - Implemented Server Actions: `fetchFilteredTweets`, `fetchTweetStats`, `deleteTweet`.
+  - Created `Search` component with debouncing.
+  - Updated `TweetTable` to display real data from database.
+  - Integrated data fetching into `app/page.tsx`.
 
 ### Pending Items
 - **Verification**:
-  - User needs to run `npx prisma generate` (blocked by file lock).
-  - User needs to run `scripts/test-import.ts` to verify API.
-  - User needs to create admin user and verify login.
+  - User needs to verify Dashboard UI (`http://localhost:3000`).
+  - Test Search, Pagination, and Delete functionality.
 
 ### Next Steps
-- Complete verification of Step 4.
-- Proceed to Step 5: Dashboard Core Features.
+- Complete verification of Step 5.
+- Proceed to Step 6: AI Worker Implementation (Background Processing).

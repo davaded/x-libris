@@ -5,13 +5,12 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-    TableCell
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from 'lucide-react';
 import { Tweet } from "@/lib/types";
 import { TweetRow } from "./TweetRow";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { AnimatePresence } from "framer-motion";
 
 interface TweetTableProps {
     tweets: Tweet[];
@@ -26,47 +25,50 @@ export function TweetTable({ tweets, selectedIds, onToggle, onToggleAll, activeF
     const allSelected = tweets.length > 0 && selectedIds.size === tweets.length;
 
     return (
-        <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-auto custom-scrollbar">
-                <Table>
-                    <TableHeader className="bg-[#09090b] sticky top-0 z-10">
-                        <TableRow className="hover:bg-transparent border-zinc-800">
-                            <TableHead className="w-[40px] pl-4">
-                                <Checkbox
-                                    checked={allSelected}
-                                    onCheckedChange={onToggleAll}
-                                    className="border-zinc-600 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                />
-                            </TableHead>
-                            <TableHead className="w-[80px] text-center">ID</TableHead>
-                            <TableHead className="w-[200px]">用户</TableHead>
-                            <TableHead className="w-[120px]">分类 (Auto)</TableHead>
-                            <TableHead className="max-w-[400px]">推文内容</TableHead>
-                            <TableHead className="w-[80px]">媒体</TableHead>
-                            <TableHead className="w-[180px]">互动数据 / 更新</TableHead>
-                            <TableHead className="w-[100px] text-right pr-4">日期</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {tweets.map((tweet) => (
+        <div className="flex-1 overflow-auto custom-scrollbar bg-[#121212]">
+            <Table>
+                <TableHeader className="bg-[#121212] sticky top-0 z-10 border-b border-[#282828]">
+                    <TableRow className="hover:bg-transparent border-[#282828]">
+                        <TableHead className="w-[50px] pl-6">
+                            <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={onToggleAll}
+                                className="border-[#757575] data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 rounded-[2px]"
+                            />
+                        </TableHead>
+                        <TableHead className="w-[250px] text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Author</TableHead>
+                        <TableHead className="w-[120px] text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Folder</TableHead>
+                        <TableHead className="min-w-[400px] text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Content</TableHead>
+                        <TableHead className="w-[100px] text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Media</TableHead>
+                        <TableHead className="w-[150px] text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Stats</TableHead>
+                        <TableHead className="w-[120px] text-right pr-6 text-[#b3b3b3] font-medium text-xs uppercase tracking-wider">Date</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    <AnimatePresence mode='wait'>
+                        {tweets.map((tweet, index) => (
                             <TweetRow
                                 key={tweet.id}
                                 tweet={tweet}
+                                index={index}
                                 isSelected={selectedIds.has(tweet.id)}
                                 onToggle={onToggle}
                                 onClick={onRowClick}
                             />
                         ))}
-                    </TableBody>
-                </Table>
+                    </AnimatePresence>
+                </TableBody>
+            </Table>
 
-                {tweets.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
-                        <Search size={48} className="mb-4 opacity-20" />
-                        <p>没有找到符合 "{activeFolder}" 的推文</p>
+            {tweets.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-[60vh] text-[#b3b3b3]">
+                    <div className="w-16 h-16 bg-[#282828] rounded-full flex items-center justify-center mb-4">
+                        <Search size={24} className="opacity-50" />
                     </div>
-                )}
-            </div>
+                    <p className="text-lg font-bold text-white">No tweets found</p>
+                    <p className="text-sm mt-1">Try adjusting your search or filters</p>
+                </div>
+            )}
         </div>
     );
 }
