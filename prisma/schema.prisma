@@ -5,29 +5,73 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"] // 开启 Postgres 扩展支持
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // extensions = [vector] // ⚠️ Temporarily disabled due to missing pgvector in target DB
 }
 
+// --- 账户与鉴权系统 ---
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String    // 仅存储 bcrypt hash
+  createdAt    DateTime  @default(now())
+  
+  sessions     Session[]
+  tweets       Tweet[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// --- 推文数据核心 ---
+
 model Tweet {
-  id           String   @id
-  url          String?  // 推文链接
+  id           String   @id // Tweet ID (tco_id 或 原始数字ID)
+  ownerId      String   // 👈 强绑定：数据所属权
+
+  // 1. 基础内容
+  url          String?
   content      String
   authorName   String
   authorHandle String
-  authorAvatar String
+  authorAvatar String?
   mediaUrls    String[]
-  hashtags     String[] // 话题标签
-  folder       String   @default("Unsorted")
-  source       String   @default("unknown") // "my_tweets" | "likes" | "bookmarks"
-  stats        Json
+  
+  // 2. 统计数据 (结构化，不再使用 Json)
+  replyCount    Int      @default(0)
+  retweetCount  Int      @default(0)
+  likeCount     Int      @default(0)
+  quoteCount    Int      @default(0)
+
+  // 3. 分类元数据
+  folder       String   @default("Unsorted") // 主文件夹
+  source       String   @default("unknown")  // 来源: "import", "extension-likes"
+  hashtags     String[] // 原推文自带标签
+  
+  // 4. AI 增强字段 (异步处理)
+  processed    Boolean  @default(false)      // 任务队列标记
+  aiTags       String[] // AI 分析出的语义标签
+  aiSummary    String?  // AI 生成的一句话摘要
+  // embedding    Unsupported("vector(1536)")? // ⚠️ Temporarily disabled
+  
   tweetedAt    DateTime
   createdAt    DateTime @default(now())
 
-  @@index([source])
+  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // 索引优化
+  @@index([ownerId])
   @@index([folder])
+  @@index([processed]) // 方便 Worker 快速查找任务
 }
