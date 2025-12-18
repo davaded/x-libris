@@ -25,6 +25,20 @@ model User {
   
   sessions     Session[]
   tweets       Tweet[]
+  apiTokens    ApiToken[]
+}
+
+model ApiToken {
+  id        String   @id @default(uuid())
+  token     String   @unique // 实际的 token 值
+  name      String   @default("Default") // 用户给 token 起的名字
+  userId    String
+  createdAt DateTime @default(now())
+  lastUsed  DateTime? // 最后使用时间
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
 }
 
 model Session {

@@ -199,6 +199,21 @@
   
   <button id="clearCacheBtn" class="btn-secondary" style="font-size: 12px; padding: 8px;">🗑 清除缓存</button>
 
+  <div class="divider"></div>
+  
+  <div class="settings">
+    <div class="setting-row">
+      <span>🔑 API Token</span>
+    </div>
+    <input type="text" id="apiToken" placeholder="粘贴你的 API Token" 
+      style="width: 100%; padding: 8px; border: 1px solid #333; border-radius: 4px; background: #161616; color: #fff; font-size: 12px; margin-top: 4px;">
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <button id="saveTokenBtn" class="btn-primary" style="font-size: 12px; padding: 8px; flex: 1;">保存</button>
+      <button id="testTokenBtn" class="btn-secondary" style="font-size: 12px; padding: 8px; flex: 1;">测试</button>
+    </div>
+    <div id="tokenStatus" style="font-size: 11px; color: #888; margin-top: 4px;"></div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

@@ -139,6 +139,59 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 初始加载缓存状态
   loadCacheStatus();
+
+  // ========== Token 管理 ==========
+  const apiTokenInput = document.getElementById('apiToken');
+  const saveTokenBtn = document.getElementById('saveTokenBtn');
+  const testTokenBtn = document.getElementById('testTokenBtn');
+  const tokenStatusEl = document.getElementById('tokenStatus');
+
+  // 加载已保存的 token
+  chrome.storage.local.get(['apiToken'], (data) => {
+    if (data.apiToken) {
+      apiTokenInput.value = data.apiToken;
+      tokenStatusEl.textContent = '✅ Token 已配置';
+      tokenStatusEl.style.color = '#00ba7c';
+    }
+  });
+
+  // 保存 token
+  saveTokenBtn.addEventListener('click', async () => {
+    const token = apiTokenInput.value.trim();
+    if (!token) {
+      tokenStatusEl.textContent = '❌ 请输入 Token';
+      tokenStatusEl.style.color = '#f4212e';
+      return;
+    }
+    
+    await chrome.storage.local.set({ apiToken: token });
+    // 通知 background 更新 token
+    chrome.runtime.sendMessage({ type: 'UPDATE_TOKEN', token });
+    tokenStatusEl.textContent = '✅ Token 已保存';
+    tokenStatusEl.style.color = '#00ba7c';
+  });
+
+  // 测试 token
+  testTokenBtn.addEventListener('click', async () => {
+    const token = apiTokenInput.value.trim();
+    if (!token) {
+      tokenStatusEl.textContent = '❌ 请输入 Token';
+      tokenStatusEl.style.color = '#f4212e';
+      return;
+    }
+
+    tokenStatusEl.textContent = '⏳ 测试中...';
+    tokenStatusEl.style.color = '#888';
+
+    const result = await chrome.runtime.sendMessage({ type: 'TEST_TOKEN', token });
+    if (result?.ok) {
+      tokenStatusEl.textContent = `✅ Token 有效 (用户: ${result.username})`;
+      tokenStatusEl.style.color = '#00ba7c';
+    } else {
+      tokenStatusEl.textContent = `❌ ${result?.error || 'Token 无效'}`;
+      tokenStatusEl.style.color = '#f4212e';
+    }
+  });
 });
 
 // 注入到页面的自动滚动函数

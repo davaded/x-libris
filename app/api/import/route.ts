@@ -1,24 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { ImportTweetPayload } from '@/lib/types';
 
-const prisma = new PrismaClient();
-
 export async function POST(req: NextRequest) {
-  // 1. Security Check: Validate Extension Token
+  // 1. Security Check: Validate API Token
   const token = req.headers.get('x-extension-token');
-  const expectedToken = process.env.EXTENSION_TOKEN;
 
-  if (!token || token !== expectedToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ error: 'Token required' }, { status: 401 });
   }
 
-  // 2. Security Check: Ensure Admin User ID is configured
-  const adminUserId = process.env.ADMIN_USER_ID;
-  if (!adminUserId) {
-    console.error('ADMIN_USER_ID is not defined in .env');
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  // 2. 查找 token 对应的用户
+  const apiToken = await prisma.apiToken.findUnique({
+    where: { token },
+    include: { user: true },
+  });
+
+  if (!apiToken) {
+    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
   }
+
+  // 更新 token 最后使用时间
+  await prisma.apiToken.update({
+    where: { id: apiToken.id },
+    data: { lastUsed: new Date() },
+  });
+
+  const userId = apiToken.userId;
 
   try {
     const payload: ImportTweetPayload = await req.json();
@@ -29,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Database Operation: Upsert Tweet
-    // Force ownerId to ADMIN_USER_ID
+    // 使用 token 对应的用户 ID
     const tweet = await prisma.tweet.upsert({
       where: { id: payload.id },
       update: {
@@ -44,7 +52,7 @@ export async function POST(req: NextRequest) {
       },
       create: {
         id: payload.id,
-        ownerId: adminUserId, // 👈 Forced Ownership
+        ownerId: userId, // 👈 使用 token 对应的用户
         url: payload.url,
         content: payload.content,
         authorName: payload.authorName,
@@ -67,7 +75,5 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Import error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { auth } from '@/auth';
 
 export async function GET(req: NextRequest) {
+  // 获取当前登录用户
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
   try {
     const { searchParams } = new URL(req.url);
     
@@ -15,8 +23,8 @@ export async function GET(req: NextRequest) {
     const folder = searchParams.get('folder');
     const search = searchParams.get('search');
 
-    // 构建查询条件
-    const where: any = {};
+    // 构建查询条件 - 只查当前用户的数据
+    const where: any = { ownerId: userId };
     
     if (source && source !== 'all') {
       where.source = source;
@@ -25,12 +33,17 @@ export async function GET(req: NextRequest) {
       where.folder = folder;
     }
     if (search) {
-      where.OR = [
-        { content: { contains: search, mode: 'insensitive' } },
-        { authorName: { contains: search, mode: 'insensitive' } },
-        { authorHandle: { contains: search, mode: 'insensitive' } },
-        { hashtags: { has: search } }
+      where.AND = [
+        { ownerId: userId },
+        {
+          OR: [
+            { content: { contains: search, mode: 'insensitive' } },
+            { authorName: { contains: search, mode: 'insensitive' } },
+            { authorHandle: { contains: search, mode: 'insensitive' } },
+          ]
+        }
       ];
+      delete where.ownerId; // 移到 AND 里了
     }
 
     // 并行查询：数据 + 总数 + 来源统计
@@ -44,11 +57,12 @@ export async function GET(req: NextRequest) {
       }),
       // 总数
       prisma.tweet.count({ where }),
-      // 来源统计（全局）
+      // 来源统计（当前用户）
       prisma.tweet.groupBy({
         by: ['source'],
+        where: { ownerId: userId },
         _count: { _all: true }
-      }).catch(() => []) // 兼容旧版 Prisma
+      }).catch(() => [])
     ]);
 
     // 格式化推文

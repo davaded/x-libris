@@ -9,11 +9,21 @@ export async function fetchFilteredTweets(
     query: string,
     currentPage: number,
     folder?: string,
+    source?: string,
 ) {
     const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
+    // 获取当前登录用户
+    const session = await auth();
+    const userId = session?.user?.id;
+
     try {
         const where: any = {};
+
+        // 只显示当前用户的推文
+        if (userId) {
+            where.ownerId = userId;
+        }
 
         if (query) {
             where.OR = [
@@ -23,8 +33,13 @@ export async function fetchFilteredTweets(
             ];
         }
 
-        if (folder && folder !== 'all') {
+        if (folder && folder !== 'All') {
             where.folder = folder;
+        }
+
+        // 按来源过滤
+        if (source && source !== 'all') {
+            where.source = source;
         }
 
         const dbTweets = await prisma.tweet.findMany({
@@ -72,12 +87,21 @@ export async function fetchFilteredTweets(
 }
 
 export async function fetchTweetStats() {
+    // 获取当前登录用户
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    const userFilter = userId ? { ownerId: userId } : {};
+
     try {
-        const totalTweets = await prisma.tweet.count();
-        const unsortedCount = await prisma.tweet.count({ where: { folder: 'Unsorted' } });
+        const totalTweets = await prisma.tweet.count({ where: userFilter });
+        const unsortedCount = await prisma.tweet.count({ 
+            where: { ...userFilter, folder: 'Unsorted' } 
+        });
 
         const folderGroups = await prisma.tweet.groupBy({
             by: ['folder'],
+            where: userFilter,
             _count: {
                 folder: true
             }

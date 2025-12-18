@@ -3,26 +3,30 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-    try {
-        const count = await prisma.tweet.count();
-        console.log(`Total Tweets in DB: ${count}`);
+  // 检查用户
+  const users = await prisma.user.findMany({
+    select: { id: true, username: true }
+  });
+  console.log('Users:', users);
 
-        const folders = await prisma.tweet.groupBy({
-            by: ['folder'],
-            _count: {
-                folder: true
-            }
-        });
-        console.log('Folder breakdown:', folders);
+  // 检查 tokens
+  const tokens = await prisma.apiToken.findMany({
+    include: { user: { select: { username: true } } }
+  });
+  console.log('API Tokens:', tokens);
 
-        const sample = await prisma.tweet.findFirst();
-        console.log('Sample Tweet:', sample);
+  // 检查推文
+  const tweets = await prisma.tweet.findMany({
+    take: 5,
+    select: { id: true, ownerId: true, authorHandle: true, source: true }
+  });
+  console.log('Sample Tweets:', tweets);
 
-    } catch (e) {
-        console.error(e);
-    } finally {
-        await prisma.$disconnect();
-    }
+  // 统计
+  const tweetCount = await prisma.tweet.count();
+  console.log('Total tweets:', tweetCount);
 }
 
-main();
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

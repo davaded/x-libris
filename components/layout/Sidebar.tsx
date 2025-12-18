@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import {
     LayoutDashboard,
     Heart,
@@ -9,7 +10,9 @@ import {
     Layers,
     Image as ImageIcon,
     Code2,
-    PenTool
+    PenTool,
+    Key,
+    LogOut
 } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,7 @@ interface SidebarProps {
         unsorted: number;
         folders: { name: string, count: number }[];
     };
+    username?: string;
     className?: string;
 }
 
@@ -74,6 +78,7 @@ export function Sidebar({
     activeFolder,
     setActiveFolder,
     stats,
+    username,
     className
 }: SidebarProps) {
 
@@ -161,17 +166,32 @@ export function Sidebar({
                 </div>
             </ScrollArea>
 
-            {/* User Profile */}
-            <div className="p-4 bg-black">
+            {/* Settings & User */}
+            <div className="p-4 bg-black space-y-2">
+                {/* Settings Link */}
+                <Link href="/settings">
+                    <Button
+                        variant="ghost"
+                        className="w-full justify-start px-4 py-2 h-auto font-medium text-[#b3b3b3] hover:text-white hover:bg-[#1a1a1a] rounded-[4px]"
+                    >
+                        <Key size={18} className="mr-3" />
+                        API Token 设置
+                    </Button>
+                </Link>
+                
+                {/* User Profile */}
                 <div className="flex items-center gap-3 p-2 rounded-[4px] hover:bg-[#1a1a1a] cursor-pointer transition-colors group">
                     <Avatar className="h-9 w-9 border border-[#282828]">
-                        <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" />
-                        <AvatarFallback>AD</AvatarFallback>
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${username || 'User'}`} />
+                        <AvatarFallback>{(username || 'U')[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="text-white font-medium text-sm truncate group-hover:underline">Admin User</span>
-                        <span className="text-[#b3b3b3] text-xs truncate">admin@xlibris.ai</span>
+                    <div className="flex flex-col overflow-hidden flex-1">
+                        <span className="text-white font-medium text-sm truncate group-hover:underline">{username || 'User'}</span>
+                        <span className="text-[#b3b3b3] text-xs truncate">已登录</span>
                     </div>
+                    <Link href="/api/auth/signout">
+                        <LogOut size={16} className="text-[#b3b3b3] hover:text-white" />
+                    </Link>
                 </div>
             </div>
         </motion.div>

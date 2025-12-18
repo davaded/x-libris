@@ -14,6 +14,7 @@ interface HeaderProps {
     setSearchQuery: (query: string) => void;
     selectedCount: number;
     onDelete: () => void;
+    onRefresh?: () => void;
 }
 
 export function Header({
@@ -24,7 +25,8 @@ export function Header({
     searchQuery,
     setSearchQuery,
     selectedCount,
-    onDelete
+    onDelete,
+    onRefresh
 }: HeaderProps) {
 
     return (
@@ -47,28 +49,33 @@ export function Header({
             <div className="flex items-center gap-4">
                 {/* Toolbar Buttons */}
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white hover:scale-105 transition-transform rounded-full font-bold">
-                        Filter
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-[#b3b3b3] hover:text-white hover:scale-105 transition-transform rounded-full font-bold"
+                        onClick={onRefresh}
+                        disabled={loading}
+                    >
+                        <RefreshCw size={16} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        刷新
                     </Button>
                     <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white hover:scale-105 transition-transform rounded-full font-bold">
-                        Export
+                        <Download size={16} className="mr-2" />
+                        导出
                     </Button>
                 </div>
 
                 {/* Primary Action / Delete */}
-                {selectedCount > 0 ? (
+                {selectedCount > 0 && (
                     <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
                         <Button
                             onClick={onDelete}
                             className="bg-red-500 hover:bg-red-400 text-white font-bold rounded-full h-10 px-6"
                         >
-                            Delete ({selectedCount})
+                            <Trash2 size={16} className="mr-2" />
+                            删除 ({selectedCount})
                         </Button>
                     </motion.div>
-                ) : (
-                    <Button className="bg-white hover:bg-[#f2f2f2] text-black font-bold rounded-full h-10 px-6 hover:scale-105 transition-transform">
-                        Add New
-                    </Button>
                 )}
             </div>
         </div>

@@ -9,8 +9,10 @@ export const authConfig = {
             const isLoggedIn = !!auth?.user;
             const isOnDashboard = !nextUrl.pathname.startsWith('/login');
 
-            // Allow access to extension import API (handled by token check in route)
-            if (nextUrl.pathname.startsWith('/api/import')) {
+            // Allow access to extension APIs (handled by token check in route)
+            if (nextUrl.pathname.startsWith('/api/import') || 
+                nextUrl.pathname.startsWith('/api/tweets/ids') ||
+                nextUrl.pathname.startsWith('/api/tokens/verify')) {
                 return true;
             }
 

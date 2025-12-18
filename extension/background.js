@@ -2,7 +2,12 @@
 console.log('[x-libris:background] Service worker started');
 
 const API_BASE = 'http://localhost:3000/api';
-const API_KEY = 'secret-api-key-123';
+
+// 动态获取用户配置的 token
+async function getApiToken() {
+  const data = await chrome.storage.local.get(['apiToken']);
+  return data.apiToken || '';
+}
 
 // ========== 已抓取 ID 缓存 ==========
 // 格式: { likes: Set, bookmarks: Set, my_tweets: Set }
@@ -16,7 +21,14 @@ const cachedIds = {
 async function loadExistingIds(source) {
   try {
     console.log('[x-libris:background] 加载已有 ID，source:', source);
-    const res = await fetch(`${API_BASE}/tweets/ids?source=${source}`);
+    const token = await getApiToken();
+    
+    const headers = {};
+    if (token) {
+      headers['x-extension-token'] = token;
+    }
+    
+    const res = await fetch(`${API_BASE}/tweets/ids?source=${source}`, { headers });
     const data = await res.json();
     
     if (data.ids && Array.isArray(data.ids)) {
@@ -88,8 +100,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // 保持消息通道
   }
 
+  // 更新 token
+  if (message.type === 'UPDATE_TOKEN') {
+    console.log('[x-libris:background] Token 已更新');
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // 测试 token
+  if (message.type === 'TEST_TOKEN') {
+    testToken(message.token).then(result => sendResponse(result));
+    return true;
+  }
+
   return false;
 });
+
+// 测试 token 是否有效
+async function testToken(token) {
+  try {
+    const res = await fetch(`${API_BASE}/tokens/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-extension-token': token
+      }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      return { ok: true, username: data.username };
+    } else {
+      return { ok: false, error: 'Token 无效' };
+    }
+  } catch (e) {
+    return { ok: false, error: '连接失败: ' + e.message };
+  }
+}
 
 // 异步处理导入
 async function handleImport(message, sendResponse) {
@@ -119,39 +166,67 @@ async function handleImport(message, sendResponse) {
       return;
     }
 
-    // 发送到后端
-    const res = await fetch(`${API_BASE}/import`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-      },
-      body: JSON.stringify({
-        ...payload,
-        parsed: tweetsToSend
-      })
-    });
+    // 逐条发送到后端（API 期望单条格式）
+    let successCount = 0;
+    let failCount = 0;
 
-    const text = await res.text();
-    console.log('[x-libris:background] API 响应:', text.slice(0, 200));
-    
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error('[x-libris:background] JSON 解析失败:', e.message);
-      sendResponse({ ok: false, error: 'Invalid JSON: ' + text.slice(0, 100) });
-      return;
+    for (const tweet of tweetsToSend) {
+      try {
+        // 转换字段格式以匹配 ImportTweetPayload
+        const importPayload = {
+          id: tweet.id,
+          url: tweet.url,
+          content: tweet.text,
+          authorName: tweet.author?.name || '',
+          authorHandle: tweet.author?.screen_name || '',
+          authorAvatar: tweet.author?.avatar,
+          mediaUrls: tweet.media?.map(m => m.url) || [],
+          hashtags: tweet.hashtags || [],
+          replyCount: tweet.metrics?.replies || 0,
+          retweetCount: tweet.metrics?.retweets || 0,
+          likeCount: tweet.metrics?.likes || 0,
+          quoteCount: 0,
+          folder: 'Unsorted',
+          source: source,
+          tweetedAt: tweet.created_at
+        };
+
+        const token = await getApiToken();
+        if (!token) {
+          console.error('[x-libris:background] 未配置 API Token');
+          sendResponse({ ok: false, error: '请先配置 API Token' });
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/import`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-extension-token': token
+          },
+          body: JSON.stringify(importPayload)
+        });
+
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const errText = await res.text();
+          console.warn('[x-libris:background] 导入失败:', tweet.id, errText.slice(0, 100));
+        }
+      } catch (e) {
+        failCount++;
+        console.error('[x-libris:background] 导入异常:', tweet.id, e.message);
+      }
     }
-    
-    const totalSkipped = skippedByCache + (data.skipped || 0);
-    
-    console.log('[x-libris:background] 导入完成, count:', data.count, 'skipped:', totalSkipped);
+
+    console.log('[x-libris:background] 导入完成, 成功:', successCount, '失败:', failCount, '跳过:', skippedByCache);
     
     sendResponse({ 
       ok: true, 
-      count: data.count || 0, 
-      skipped: totalSkipped 
+      count: successCount, 
+      skipped: skippedByCache,
+      failed: failCount
     });
   } catch (err) {
     console.error('[x-libris:background] Import failed:', err);
